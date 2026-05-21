@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 映画クイズ道場</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Oswald:wght@400;600;700&display=swap');
+
+  :root {
+    --gold: #FFD700;
+    --gold2: #FFA500;
+    --red: #E50000;
+    --dark: #0a0a0f;
+    --dark2: #12121a;
+    --dark3: #1a1a2e;
+    --panel: rgba(255,255,255,0.05);
+    --border: rgba(255,215,0,0.3);
+    --text: #f0e6d0;
+    --correct: #00e676;
+    --wrong: #ff1744;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--dark);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Film grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* Film strip decoration */
+  .filmstrip-top, .filmstrip-bottom {
+    position: fixed;
+    left: 0; right: 0;
+    height: 32px;
+    background: #111;
+    display: flex;
+    align-items: center;
+    z-index: 50;
+    gap: 0;
+  }
+  .filmstrip-top { top: 0; border-bottom: 2px solid #222; }
+  .filmstrip-bottom { bottom: 0; border-top: 2px solid #222; }
+  .filmstrip-top::before, .filmstrip-top::after,
+  .filmstrip-bottom::before, .filmstrip-bottom::after {
+    content: '';
+    display: block;
+    flex: 1;
+    height: 18px;
+    background: repeating-linear-gradient(
+      90deg,
+      transparent 0px, transparent 18px,
+      #333 18px, #333 20px,
+      transparent 20px, transparent 38px
+    );
+  }
+  .filmstrip-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: #555;
+    padding: 0 20px;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+
+  /* Pages */
+  .page { display: none; min-height: 100vh; padding: 50px 16px; }
+  .page.active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+  /* === TOP PAGE === */
+  #page-top {
+    background: radial-gradient(ellipse at center top, #1a1a2e 0%, #0a0a0f 60%);
+    padding-top: 60px;
+  }
+
+  .top-logo {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .top-logo .clapper {
+    font-size: clamp(48px, 10vw, 80px);
+    display: block;
+    filter: drop-shadow(0 0 20px rgba(255,215,0,0.5));
+    animation: clap 3s ease-in-out infinite;
+  }
+  @keyframes clap {
+    0%,100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+  }
+  .top-logo h1 {
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(28px, 6vw, 52px);
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--gold);
+    text-shadow: 0 0 30px rgba(255,215,0,0.4);
+    line-height: 1.1;
+  }
+  .top-logo .subtitle {
+    font-size: clamp(12px, 2.5vw, 16px);
+    letter-spacing: 6px;
+    color: #888;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .rule-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    max-width: 480px;
+    width: 100%;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #bbb;
+  }
+  .rule-box strong { color: var(--gold); }
+
+  /* Genre grid */
+  .genre-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    max-width: 520px;
+    width: 100%;
+    margin: 8px 0 16px;
+  }
+  @media (min-width: 600px) {
+    .genre-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .genre-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+  }
+  .genre-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,215,0,0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+  .genre-card:hover { border-color: var(--gold); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(255,215,0,0.15); }
+  .genre-card:hover::before { opacity: 1; }
+  .genre-card .icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .genre-card .name {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--gold);
+    display: block;
+  }
+  .genre-card .count {
+    font-size: 11px;
+    color: #666;
+    margin-top: 2px;
+  }
+
+  .btn-ranking-top {
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    transition: all 0.2s;
+    margin-top: 4px;
+  }
+  .btn-ranking-top:hover { border-color: var(--gold); color: var(--gold); }
+
+  .btn-portal {
+    background: transparent;
+    border: 1px solid #333;
+    color: #666;
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    transition: all 0.2s;
+    margin-top: 8px;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-portal:hover { border-color: #888; color: #aaa; }
+
+  /* === PLAYER NAME PAGE === */
+  .player-form {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 24px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+  }
+  .player-form h2 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px;
+    color: var(--gold);
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  .player-form .genre-badge {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+    display: block;
+  }
+  .player-form input {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 16px;
+    font-family: 'Noto Sans JP', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 16px;
+  }
+  .player-form input:focus { border-color: var(--gold); }
+  .player-form input::placeholder { color: #555; }
+
+  .btn-start {
+    width: 100%;
+    background: linear-gradient(135deg, var(--gold), var(--gold2));
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .btn-start:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(255,215,0,0.4); }
+
+  .btn-back {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    margin-top: 12px;
+    transition: color 0.2s;
+  }
+  .btn-back:hover { color: var(--gold); }
+
+  /* === QUIZ PAGE === */
+  #page-quiz {
+    background: radial-gradient(ellipse at center, #0d0d1a 0%, #050508 100%);
+    justify-content: flex-start;
+    padding-top: 52px;
+  }
+
+  .quiz-header {
+    width: 100%;
+    max-width: 640px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    margin-bottom: 8px;
+  }
+  .quiz-progress {
+    font-family: 'Oswald', sans-serif;
+    font-size: 18px;
+    color: #888;
+  }
+  .quiz-progress span { color: var(--gold); font-size: 22px; }
+  .quiz-score-display {
+    font-family: 'Oswald', sans-serif;
+    font-size: 18px;
+    color: var(--gold);
+  }
+
+  /* Timer */
+  .timer-wrap {
+    width: 100%;
+    max-width: 640px;
+    margin-bottom: 12px;
+  }
+  .timer-bar-bg {
+    background: #1a1a1a;
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .timer-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    border-radius: 4px;
+    transition: width 0.5s linear, background 0.5s;
+  }
+  .timer-bar.danger { background: linear-gradient(90deg, #ff1744, #ff6b35); }
+  .timer-num {
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 36px;
+    color: var(--gold);
+    line-height: 1.2;
+    margin-top: 4px;
+  }
+  .timer-num.danger { color: var(--wrong); }
+
+  /* Question */
+  .question-box {
+    width: 100%;
+    max-width: 640px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    min-height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .question-type-badge {
+    display: inline-block;
+    background: rgba(255,215,0,0.15);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 11px;
+    color: var(--gold);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .question-text {
+    font-size: clamp(14px, 3.5vw, 18px);
+    font-weight: 700;
+    line-height: 1.6;
+    text-align: center;
+    color: #fff;
+  }
+
+  /* Choices */
+  .choices-grid {
+    width: 100%;
+    max-width: 640px;
+    display: grid;
+    gap: 10px;
+  }
+  .choices-grid.four { grid-template-columns: 1fr 1fr; }
+  .choices-grid.two { grid-template-columns: 1fr 1fr; }
+
+  .choice-btn {
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 14px 12px;
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: clamp(13px, 3vw, 15px);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.4;
+  }
+  .choice-btn:hover:not(:disabled) { border-color: var(--gold); background: rgba(255,215,0,0.08); transform: scale(1.01); }
+  .choice-btn.correct { background: rgba(0,230,118,0.15); border-color: var(--correct); color: var(--correct); }
+  .choice-btn.wrong { background: rgba(255,23,68,0.15); border-color: var(--wrong); color: var(--wrong); }
+  .choice-btn:disabled { cursor: default; }
+
+  /* Feedback */
+  .feedback-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    background: rgba(0,0,0,0.9);
+    border-radius: 20px;
+    padding: 24px 40px;
+    text-align: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+  }
+  .feedback-overlay.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .feedback-overlay.correct-fb { border-color: var(--correct); }
+  .feedback-overlay.wrong-fb { border-color: var(--wrong); }
+  .feedback-overlay .fb-icon { font-size: 48px; }
+  .feedback-overlay .fb-msg { font-size: 22px; font-weight: 900; margin: 4px 0; }
+  .feedback-overlay .fb-time { font-size: 14px; color: #aaa; }
+  .feedback-overlay .fb-answer { font-size: 13px; color: #ccc; margin-top: 4px; }
+
+  /* === RESULT PAGE === */
+  #page-result {
+    background: radial-gradient(ellipse at center, #1a1400 0%, #0a0a0f 70%);
+  }
+
+  .result-box {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }
+  .result-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(20px, 5vw, 30px);
+    letter-spacing: 4px;
+    color: var(--gold);
+    margin-bottom: 16px;
+  }
+  .result-score-big {
+    font-family: 'Oswald', sans-serif;
+    font-size: clamp(56px, 15vw, 96px);
+    color: var(--gold);
+    text-shadow: 0 0 40px rgba(255,215,0,0.5);
+    line-height: 1;
+    margin: 8px 0;
+  }
+  .result-score-big span { font-size: 0.4em; color: #888; }
+  .result-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin: 16px 0;
+  }
+  .result-stat { text-align: center; }
+  .result-stat .val {
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    color: var(--gold);
+  }
+  .result-stat .lbl { font-size: 12px; color: #666; }
+
+  .result-rank-badge {
+    display: inline-block;
+    margin: 8px 0 16px;
+    padding: 6px 20px;
+    border-radius: 20px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+  }
+  .rank-s { background: linear-gradient(135deg,#FFD700,#FFA500); color: #000; }
+  .rank-a { background: linear-gradient(135deg,#C0C0C0,#A0A0A0); color: #000; }
+  .rank-b { background: linear-gradient(135deg,#CD7F32,#8B5A2B); color: #fff; }
+  .rank-c { background: rgba(255,255,255,0.1); color: #aaa; }
+
+  /* Wrong answers list */
+  .wrong-list {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto 16px;
+  }
+  .wrong-list h3 {
+    font-family: 'Oswald', sans-serif;
+    color: var(--wrong);
+    font-size: 16px;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .wrong-item {
+    background: var(--panel);
+    border: 1px solid rgba(255,23,68,0.3);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    text-align: left;
+  }
+  .wrong-item .wi-q { font-size: 13px; color: #ccc; line-height: 1.5; margin-bottom: 6px; }
+  .wrong-item .wi-your { font-size: 12px; color: var(--wrong); }
+  .wrong-item .wi-ans { font-size: 12px; color: var(--correct); font-weight: 700; margin-top: 2px; }
+
+  .result-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 320px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .btn-retry {
+    background: linear-gradient(135deg, var(--gold), var(--gold2));
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-retry:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(255,215,0,0.4); }
+
+  .btn-top {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--gold);
+    border-radius: 10px;
+    padding: 13px;
+    font-size: 14px;
+    font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-top:hover { background: rgba(255,215,0,0.08); }
+
+  /* === RANKING PAGE === */
+  #page-ranking {
+    background: radial-gradient(ellipse at top, #0d0d1a, #050508);
+    justify-content: flex-start;
+    padding-top: 60px;
+  }
+  .ranking-wrap {
+    width: 100%;
+    max-width: 560px;
+  }
+  .ranking-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 24px;
+    color: var(--gold);
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .ranking-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    justify-content: center;
+  }
+  .rtab {
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #888;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: all 0.2s;
+  }
+  .rtab.active { background: rgba(255,215,0,0.15); border-color: var(--gold); color: var(--gold); }
+  .ranking-table {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .ranking-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    gap: 12px;
+  }
+  .ranking-row:last-child { border-bottom: none; }
+  .ranking-row .rank {
+    font-family: 'Oswald', sans-serif;
+    font-size: 20px;
+    width: 32px;
+    text-align: center;
+  }
+  .rank-1 { color: var(--gold); }
+  .rank-2 { color: #C0C0C0; }
+  .rank-3 { color: #CD7F32; }
+  .ranking-row .rname { flex: 1; font-weight: 700; font-size: 14px; }
+  .ranking-row .rscore {
+    font-family: 'Oswald', sans-serif;
+    font-size: 18px;
+    color: var(--gold);
+  }
+  .ranking-row .rdate { font-size: 11px; color: #555; }
+  .ranking-empty { text-align: center; padding: 32px; color: #555; font-size: 14px; }
+
+  .btn-delete-rank {
+    background: transparent;
+    border: 1px solid #333;
+    color: #555;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'Noto Sans JP', sans-serif;
+    margin-top: 12px;
+    transition: all 0.2s;
+    width: 100%;
+  }
+  .btn-delete-rank:hover { border-color: var(--wrong); color: var(--wrong); }
+
+  /* Utility */
+  .hidden { display: none !important; }
+  .mt8 { margin-top: 8px; }
+  .mt16 { margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<div class="filmstrip-top">
+  <div class="filmstrip-title">🎬 MOVIE QUIZ DOJO</div>
+</div>
+<div class="filmstrip-bottom">
+  <div class="filmstrip-title">🎬 CINEMA KNOWLEDGE</div>
+</div>
+
+<!-- TOP PAGE -->
+<div id="page-top" class="page active">
+  <div class="top-logo">
+    <span class="clapper">🎬</span>
+    <h1>映画クイズ道場</h1>
+    <p class="subtitle">MOVIE QUIZ DOJO</p>
+  </div>
+
+  <div class="rule-box">
+    制限時間：<strong>120秒</strong> ／ 各ジャンル <strong>10問</strong> ランダム出題<br>
+    ✅ 正解 → <strong>+10点</strong> ＋ 時間+5秒<br>
+    ❌ 不正解 → 減点なし ＋ 時間−5秒のペナルティ<br>
+    🏆 残り時間がそのままボーナス点に加算！<br>
+    【4択】と【○×】がランダムにミックスされます
+  </div>
+
+  <div class="genre-grid" id="genre-grid"></div>
+
+  <button class="btn-ranking-top" onclick="showRanking()">🏆 スコアランキングを見る</button>
+  <a href="https://pecpec37-gift.github.io/portal/" class="btn-portal">🏠 ポータルサイトに戻る</a>
+</div>
+
+<!-- PLAYER NAME PAGE -->
+<div id="page-player" class="page">
+  <div class="player-form">
+    <h2>🎬 クイズスタート</h2>
+    <span class="genre-badge" id="selected-genre-label"></span>
+    <input type="text" id="player-name" placeholder="プレーヤー名を入力" maxlength="12">
+    <button class="btn-start" onclick="startQuiz()">スタート ▶</button>
+    <button class="btn-back" onclick="showPage('page-top')">← 戻る</button>
+  </div>
+</div>
+
+<!-- QUIZ PAGE -->
+<div id="page-quiz" class="page">
+  <div class="quiz-header">
+    <div class="quiz-progress">Q<span id="q-num">1</span> / 10</div>
+    <div class="quiz-score-display">⭐ <span id="q-score">0</span> pt</div>
+  </div>
+
+  <div class="timer-wrap">
+    <div class="timer-bar-bg">
+      <div class="timer-bar" id="timer-bar"></div>
+    </div>
+    <div class="timer-num" id="timer-num">120</div>
+  </div>
+
+  <div class="question-box">
+    <div>
+      <div class="question-type-badge" id="q-type-badge">4択</div>
+      <div class="question-text" id="q-text"></div>
+    </div>
+  </div>
+
+  <div class="choices-grid four" id="choices-grid"></div>
+</div>
+
+<!-- RESULT PAGE -->
+<div id="page-result" class="page">
+  <div class="result-box">
+    <div class="result-title">🎬 結果発表</div>
+    <div class="result-score-big" id="res-score">0<span>POINTS</span></div>
+    <div id="res-rank-badge" class="result-rank-badge rank-c">RANK C</div>
+    <div class="result-stats">
+      <div class="result-stat"><div class="val" id="res-correct">0</div><div class="lbl">正解</div></div>
+      <div class="result-stat"><div class="val" id="res-wrong">0</div><div class="lbl">不正解</div></div>
+      <div class="result-stat"><div class="val" id="res-bonus">+0</div><div class="lbl">時間ボーナス</div></div>
+    </div>
+
+    <div class="wrong-list" id="wrong-list"></div>
+
+    <div class="result-btns">
+      <button class="btn-retry" onclick="retryQuiz()">🔄 もう一度挑戦</button>
+      <button class="btn-top" onclick="showPage('page-top')">← トップへ</button>
+      <a href="https://pecpec37-gift.github.io/portal/" class="btn-portal" style="text-align:center;">🏠 ポータルサイトに戻る</a>
+    </div>
+  </div>
+</div>
+
+<!-- RANKING PAGE -->
+<div id="page-ranking" class="page">
+  <div class="ranking-wrap">
+    <div class="ranking-title">🏆 RANKING</div>
+    <div class="ranking-tabs" id="ranking-tabs"></div>
+    <div class="ranking-table" id="ranking-table"></div>
+    <button class="btn-delete-rank" id="btn-delete" onclick="deleteRanking()">🗑️ このジャンルの記録を削除</button>
+    <button class="btn-top mt16" style="width:100%;border-radius:10px;padding:13px;border:1px solid rgba(255,215,0,0.3);color:var(--gold);background:transparent;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:14px;" onclick="showPage('page-top')">← トップへ</button>
+  </div>
+</div>
+
+<!-- Feedback overlay -->
+<div class="feedback-overlay" id="feedback-overlay">
+  <div class="fb-icon" id="fb-icon"></div>
+  <div class="fb-msg" id="fb-msg"></div>
+  <div class="fb-time" id="fb-time"></div>
+  <div class="fb-answer" id="fb-answer"></div>
+</div>
+
+<script src="questions.js"></script>
+<script>
+// ==============================
+// GENRES CONFIG
+// ==============================
+const GENRES = [
+  { id: 'japan',    name: '日本映画',   icon: '🗾', desc: '邦画の名作・話題作' },
+  { id: 'foreign',  name: '外国映画',   icon: '🌎', desc: 'ハリウッド・世界の映画' },
+  { id: 'era',      name: '制作年代別', icon: '📅', desc: '各時代の映画を出題' },
+  { id: 'director', name: '監督別',     icon: '🎥', desc: '名監督の作品' },
+  { id: 'actor',    name: '俳優別',     icon: '🌟', desc: '名俳優に関するクイズ' },
+  { id: 'hard',     name: '上級者向け', icon: '💀', desc: 'マニアックな難問' },
+];
+
+// ==============================
+// STATE
+// ==============================
+let currentGenre = '';
+let playerName = '';
+let quizQuestions = [];
+let currentQ = 0;
+let score = 0;
+let correctCount = 0;
+let wrongAnswers = [];
+let timerInterval = null;
+let timeLeft = 120;
+const MAX_TIME = 120;
+
+// ==============================
+// INIT
+// ==============================
+function init() {
+  const grid = document.getElementById('genre-grid');
+  GENRES.forEach(g => {
+    const card = document.createElement('div');
+    card.className = 'genre-card';
+    const cnt = (QUESTIONS[g.id] || []).length;
+    card.innerHTML = `<span class="icon">${g.icon}</span><span class="name">${g.name}</span><span class="count">${cnt}問収録</span>`;
+    card.onclick = () => selectGenre(g.id);
+    grid.appendChild(card);
+  });
+  buildRankingTabs();
+}
+
+// ==============================
+// PAGE NAVIGATION
+// ==============================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function selectGenre(id) {
+  currentGenre = id;
+  const g = GENRES.find(x => x.id === id);
+  document.getElementById('selected-genre-label').textContent = `${g.icon} ${g.name}`;
+  const savedName = localStorage.getItem('moviequiz_player') || '';
+  document.getElementById('player-name').value = savedName;
+  showPage('page-player');
+}
+
+// ==============================
+// QUIZ FLOW
+// ==============================
+function startQuiz() {
+  const name = document.getElementById('player-name').value.trim();
+  if (!name) { alert('プレーヤー名を入力してください'); return; }
+  playerName = name;
+  localStorage.setItem('moviequiz_player', name);
+
+  const pool = [...(QUESTIONS[currentGenre] || [])];
+  quizQuestions = shuffle(pool).slice(0, 10);
+  currentQ = 0;
+  score = 0;
+  correctCount = 0;
+  wrongAnswers = [];
+  timeLeft = MAX_TIME;
+
+  showPage('page-quiz');
+  renderQuestion();
+  startTimer();
+}
+
+function renderQuestion() {
+  if (currentQ >= quizQuestions.length) { endQuiz(); return; }
+  const q = quizQuestions[currentQ];
+  document.getElementById('q-num').textContent = currentQ + 1;
+  document.getElementById('q-score').textContent = score;
+  document.getElementById('q-text').textContent = q.q;
+
+  const isTF = q.type === 'tf';
+  document.getElementById('q-type-badge').textContent = isTF ? '○×' : '4択';
+  const grid = document.getElementById('choices-grid');
+  grid.innerHTML = '';
+  grid.className = `choices-grid ${isTF ? 'two' : 'four'}`;
+
+  const choices = isTF
+    ? ['○ 正しい', '× 間違い']
+    : shuffle([q.answer, ...q.wrong]);
+
+  choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = c;
+    btn.onclick = () => handleAnswer(c, q, btn);
+    grid.appendChild(btn);
+  });
+}
+
+function handleAnswer(chosen, q, btn) {
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+
+  const correct = isTFQuestion(q) ? tfMatch(chosen, q.answer) : chosen === q.answer;
+
+  if (correct) {
+    btn.classList.add('correct');
+    score += 10;
+    correctCount++;
+    timeLeft = Math.min(timeLeft + 5, MAX_TIME);
+    showFeedback(true, null, q.answer);
+  } else {
+    btn.classList.add('wrong');
+    // Highlight correct
+    document.querySelectorAll('.choice-btn').forEach(b => {
+      if (isTFQuestion(q) ? tfMatch(b.textContent, q.answer) : b.textContent === q.answer) {
+        b.classList.add('correct');
+      }
+    });
+    timeLeft = Math.max(timeLeft - 5, 0);
+    wrongAnswers.push({ q: q.q, your: chosen, ans: q.answer });
+    showFeedback(false, chosen, q.answer);
+  }
+
+  updateTimerDisplay();
+  currentQ++;
+  setTimeout(() => {
+    hideFeedback();
+    if (timeLeft <= 0) { endQuiz(); return; }
+    renderQuestion();
+  }, 1400);
+}
+
+function isTFQuestion(q) { return q.type === 'tf'; }
+function tfMatch(chosen, answer) {
+  const pos = answer === '○' || answer === '正しい' || answer === true || answer === '○ 正しい';
+  if (pos) return chosen === '○ 正しい' || chosen === '○';
+  return chosen === '× 間違い' || chosen === '×';
+}
+
+// ==============================
+// TIMER
+// ==============================
+function startTimer() {
+  clearInterval(timerInterval);
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) { clearInterval(timerInterval); endQuiz(); }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const num = document.getElementById('timer-num');
+  const bar = document.getElementById('timer-bar');
+  num.textContent = Math.max(timeLeft, 0);
+  const pct = (timeLeft / MAX_TIME) * 100;
+  bar.style.width = pct + '%';
+  const danger = timeLeft <= 20;
+  num.classList.toggle('danger', danger);
+  bar.classList.toggle('danger', danger);
+}
+
+// ==============================
+// FEEDBACK
+// ==============================
+function showFeedback(correct, chosen, answer) {
+  const el = document.getElementById('feedback-overlay');
+  document.getElementById('fb-icon').textContent = correct ? '✅' : '❌';
+  document.getElementById('fb-msg').textContent = correct ? '正解！' : '不正解';
+  document.getElementById('fb-msg').style.color = correct ? 'var(--correct)' : 'var(--wrong)';
+  document.getElementById('fb-time').textContent = correct ? '⏱ +5秒' : '⏱ −5秒';
+  document.getElementById('fb-answer').textContent = correct ? '' : `正解は：${answer}`;
+  el.className = `feedback-overlay show ${correct ? 'correct-fb' : 'wrong-fb'}`;
+}
+function hideFeedback() {
+  document.getElementById('feedback-overlay').className = 'feedback-overlay';
+}
+
+// ==============================
+// END QUIZ
+// ==============================
+function endQuiz() {
+  clearInterval(timerInterval);
+  const bonus = Math.max(timeLeft, 0);
+  const total = score + bonus;
+
+  document.getElementById('res-score').innerHTML = `${total}<span>POINTS</span>`;
+  document.getElementById('res-correct').textContent = correctCount;
+  document.getElementById('res-wrong').textContent = quizQuestions.length - correctCount;
+  document.getElementById('res-bonus').textContent = `+${bonus}`;
+
+  // Rank
+  let rank, rankClass;
+  if (total >= 150) { rank = 'S RANK'; rankClass = 'rank-s'; }
+  else if (total >= 110) { rank = 'A RANK'; rankClass = 'rank-a'; }
+  else if (total >= 70)  { rank = 'B RANK'; rankClass = 'rank-b'; }
+  else                   { rank = 'C RANK'; rankClass = 'rank-c'; }
+
+  const badge = document.getElementById('res-rank-badge');
+  badge.textContent = rank;
+  badge.className = `result-rank-badge ${rankClass}`;
+
+  // Wrong list
+  const wl = document.getElementById('wrong-list');
+  if (wrongAnswers.length > 0) {
+    wl.innerHTML = `<h3>❌ 間違えた問題</h3>` +
+      wrongAnswers.map(w => `
+        <div class="wrong-item">
+          <div class="wi-q">Q. ${w.q}</div>
+          <div class="wi-your">あなたの答え：${w.your}</div>
+          <div class="wi-ans">✅ 正解：${w.ans}</div>
+        </div>`).join('');
+  } else {
+    wl.innerHTML = `<div style="text-align:center;color:var(--correct);padding:16px;font-weight:700;">🎉 全問正解！パーフェクト！</div>`;
+  }
+
+  // Save ranking
+  saveScore(currentGenre, playerName, total);
+  showPage('page-result');
+}
+
+function retryQuiz() {
+  showPage('page-player');
+}
+
+// ==============================
+// RANKING
+// ==============================
+let currentRankingGenre = GENRES[0].id;
+
+function buildRankingTabs() {
+  const tabs = document.getElementById('ranking-tabs');
+  GENRES.forEach(g => {
+    const t = document.createElement('button');
+    t.className = 'rtab' + (g.id === currentRankingGenre ? ' active' : '');
+    t.textContent = `${g.icon} ${g.name}`;
+    t.onclick = () => { currentRankingGenre = g.id; renderRankingTable(); tabs.querySelectorAll('.rtab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); };
+    tabs.appendChild(t);
+  });
+}
+
+function showRanking() {
+  renderRankingTable();
+  showPage('page-ranking');
+}
+
+function renderRankingTable() {
+  const key = `moviequiz_rank_${currentRankingGenre}`;
+  const data = JSON.parse(localStorage.getItem(key) || '[]');
+  const tbl = document.getElementById('ranking-table');
+
+  if (data.length === 0) {
+    tbl.innerHTML = `<div class="ranking-empty">まだ記録がありません</div>`;
+    return;
+  }
+
+  tbl.innerHTML = data.slice(0, 10).map((r, i) => {
+    const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1;
+    return `<div class="ranking-row">
+      <span class="rank ${rankClass}">${medal}</span>
+      <span class="rname">${r.name}</span>
+      <span class="rdate">${r.date}</span>
+      <span class="rscore">${r.score}pt</span>
+    </div>`;
+  }).join('');
+}
+
+function saveScore(genre, name, score) {
+  const key = `moviequiz_rank_${genre}`;
+  const data = JSON.parse(localStorage.getItem(key) || '[]');
+  const now = new Date();
+  const date = `${now.getMonth()+1}/${now.getDate()}`;
+  data.push({ name, score, date });
+  data.sort((a, b) => b.score - a.score);
+  localStorage.setItem(key, JSON.stringify(data.slice(0, 20)));
+}
+
+function deleteRanking() {
+  if (!confirm(`「${GENRES.find(g=>g.id===currentRankingGenre)?.name}」の記録を削除しますか？`)) return;
+  localStorage.removeItem(`moviequiz_rank_${currentRankingGenre}`);
+  renderRankingTable();
+}
+
+// ==============================
+// UTILS
+// ==============================
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+init();
+</script>
+</body>
+</html>
